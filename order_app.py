@@ -1,6 +1,9 @@
-"""Shopora Order Agent — Mobile App 📱
-====================================
-Streamlit app: customer chat (WhatsApp jaisa) + orders dashboard.
+"""Order Agent — Mobile App 📱
+============================
+Har business ke liye configurable WhatsApp-style order agent.
+
+Tabs: 💬 Customer Chat (WhatsApp jaisa) + 📦 Orders dashboard + ⚙️ Settings
+(Settings me dukaan ka naam, products, prices, WhatsApp number sab badlein!)
 
 Chalayein:
   streamlit run order_app.py
@@ -12,10 +15,16 @@ import os
 import pandas as pd
 import streamlit as st
 
-from agent import OrderAgent, ORDERS_FILE, SHOP_NAME
+from agent import OrderAgent, ORDERS_FILE, reload_config
+from config import load_settings, save_settings, DEFAULT_SETTINGS
 
-st.set_page_config(page_title="Shopora Order Agent", page_icon="🤖",
+st.set_page_config(page_title="Order Agent", page_icon="🤖",
                    layout="centered")
+
+# Settings sab se pehle (login screen par bhi dukaan ka naam dikhe)
+if "settings" not in st.session_state:
+    st.session_state.settings = load_settings()
+settings = st.session_state.settings
 
 # ------------------------------------------------------------ simple login
 # 🔑 APNA LOGIN YAHAN SET KAREIN (username: password)
@@ -36,7 +45,7 @@ if "login_user" not in st.session_state:
     st.session_state.login_user = ""
 
 if not st.session_state.logged_in:
-    st.title("🔐 Shopora Order Agent")
+    st.title("🔐 {} Order Agent".format(settings["shop_name"]))
     st.caption("Login karke andar jayein")
     u = st.text_input("Username", key="login_u")
     p = st.text_input("Password", type="password", key="login_p")
@@ -69,10 +78,11 @@ if "chat" not in st.session_state:
 if "phone" not in st.session_state:
     st.session_state.phone = "app-customer"
 
-tab_chat, tab_orders = st.tabs(["💬 Customer Chat", "📦 Orders"])
+tab_chat, tab_orders, tab_settings = st.tabs(
+    ["💬 Customer Chat", "📦 Orders", "⚙️ Settings"])
 
 with tab_chat:
-    st.title("🤖 {} Order Agent".format(SHOP_NAME))
+    st.title("🤖 {} Order Agent".format(settings["shop_name"]))
     st.caption("Customer ban kar baat karein — bilkul WhatsApp jaisa! "
                "| 👤 {} | ".format(st.session_state.login_user))
     if st.button("🚪 Logout"):
@@ -112,15 +122,99 @@ with tab_orders:
             orders = []
     if orders:
         df = pd.DataFrame(orders)
+        # purane orders me "price_aed" tha, naye me "price"
+        if "price" not in df.columns and "price_aed" in df.columns:
+            df["price"] = df["price_aed"]
         cols = [c for c in ["order_id", "name", "phone", "product",
-                            "price_aed", "city", "status", "time"]
+                            "price", "city", "status", "time"]
                 if c in df.columns]
         st.dataframe(df[cols], use_container_width=True, hide_index=True)
         st.metric("Total orders", len(df),
-                  "{} AED".format(int(df["price_aed"].sum()))
-                  if "price_aed" in df.columns else None)
+                  "{} {}".format(int(df["price"].sum()), settings["currency"])
+                  if "price" in df.columns else None)
         csv = df.to_csv(index=False).encode("utf-8-sig")
         st.download_button("⬇️ CSV Download", csv,
-                           "shopora_orders.csv", "text/csv")
+                           "orders.csv", "text/csv")
     else:
         st.info("Abhi koi order nahi — pehle 💬 chat me order karein!")
+
+with tab_settings:
+    st.title("⚙️ Business Settings")
+    st.caption("Apne business ke hisaab se set karein — **Save** karte hi "
+               "agent foran naye settings par chal parega! 🚀")
+
+    s = st.session_state.settings
+    shop = st.text_input("🏪 Dukaan / Business ka naam",
+                         value=s.get("shop_name", ""))
+    c1, c2 = st.columns(2)
+    currency = c1.text_input("💱 Currency (jaise: AED, PKR, Rs)",
+                             value=s.get("currency", ""))
+    order_prefix = c2.text_input("🧾 Order ID prefix (jaise: SHP)",
+                                 value=s.get("order_prefix", ""))
+    whatsapp = st.text_input("📞 WhatsApp number (orders ke liye)",
+                             value=s.get("whatsapp", ""))
+    delivery = st.text_area("🚚 Delivery info",
+                            value=s.get("delivery_info", ""))
+
+    st.subheader("📦 Products")
+    st.caption("Neeche table me **direct edit** karein — naam, price, wazahat. "
+               "Nayi row add karne ke liye aakhri khaali row use karein, "
+               "hatane ke liye row select karke 🗑️ dabayein.")
+    df_prod = pd.DataFrame(s.get("products", []))
+    for col in ["name", "price", "desc"]:
+        if col not in df_prod.columns:
+            df_prod[col] = "" if col != "price" else 0
+    edited = st.data_editor(
+        df_prod[["name", "price", "desc"]],
+        num_rows="dynamic",
+        use_container_width=True,
+        hide_index=True,
+        column_config={
+            "name": st.column_config.TextColumn("Product ka naam",
+                                                required=True),
+            "price": st.column_config.NumberColumn("Price", min_value=0,
+                                                   required=True),
+            "desc": st.column_config.TextColumn("Wazahat"),
+        },
+        key="products_editor",
+    )
+
+    b1, b2 = st.columns(2)
+    if b1.button("💾 Save Settings", use_container_width=True):
+        products = []
+        for i, row in enumerate(edited.to_dict("records"), 1):
+            name = str(row.get("name", "")).strip()
+            if not name:
+                continue
+            try:
+                price = int(float(row.get("price") or 0))
+            except (TypeError, ValueError):
+                price = 0
+            products.append({"id": i, "name": name, "price": price,
+                             "desc": str(row.get("desc", "")).strip()})
+        if not products:
+            st.error("❌ Kam az kam 1 product to rakhein!")
+        else:
+            new_settings = {
+                "shop_name": shop.strip() or "My Shop",
+                "currency": currency.strip() or "AED",
+                "whatsapp": whatsapp.strip(),
+                "delivery_info": delivery.strip(),
+                "order_prefix": order_prefix.strip() or "SHP",
+                "products": products,
+            }
+            save_settings(new_settings)
+            reload_config()
+            st.session_state.settings = new_settings
+            st.session_state.agent = OrderAgent()  # taaza settings ke saath
+            st.success("✅ Save ho gaya! Agent ab **{}** ke naye settings "
+                       "par chal raha hai! 🎉".format(new_settings["shop_name"]))
+            st.rerun()
+
+    if b2.button("↩️ Reset (default Shopora)", use_container_width=True):
+        save_settings(DEFAULT_SETTINGS)
+        reload_config()
+        st.session_state.settings = load_settings()
+        st.session_state.agent = OrderAgent()
+        st.success("✅ Default settings wapas laga di!")
+        st.rerun()

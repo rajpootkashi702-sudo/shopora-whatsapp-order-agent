@@ -24,41 +24,35 @@ import random
 import re
 from datetime import datetime
 
-# ---------------------------------------------------------------- config
+from config import load_settings, DEFAULT_SETTINGS
 
-SHOP_NAME = "Shopora"
-WHATSAPP_NUMBER = "+92 319 6800420"
-CURRENCY = "AED"
-DELIVERY_INFO = "Cash on Delivery — pooray UAE (7 emirates), 2-4 working days"
+# ---------------------------------------------------------------- config
+# Business settings settings.json se aati hain (config.py). Har banda apne
+# business ke hisaab se ⚙️ Settings tab se badal sakta hai.
+
+_CFG = load_settings()
+
+SHOP_NAME = _CFG["shop_name"]
+WHATSAPP_NUMBER = _CFG["whatsapp"]
+CURRENCY = _CFG["currency"]
+DELIVERY_INFO = _CFG["delivery_info"]
+ORDER_PREFIX = _CFG["order_prefix"]
+PRODUCTS = _CFG["products"]
 ORDERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                            "orders.json")
 
-PRODUCTS = [
-    {"id": 1, "name": "Smart Sweeping Robot", "price": 59,
-     "desc": "Khud safai kare, aap aaram karein! 🤖"},
-    {"id": 2, "name": "Mini Camera Pen", "price": 59,
-     "desc": "Likhnay wala pen jo video bhi banaye! 🖊️"},
-    {"id": 3, "name": "Kids Instant Print Camera", "price": 59,
-     "desc": "Bachon ka camera — photo kheecho, foran print! 📸"},
-    {"id": 4, "name": "Handheld Steam Cleaner", "price": 69,
-     "desc": "Bijli ki taqat se gehra saaf! ✨"},
-    {"id": 5, "name": "2-in-1 Eyebrow Trimmer", "price": 49,
-     "desc": "Salon wali finishing ghar par! 💅"},
-    {"id": 6, "name": "Vacuum Sealer Machine", "price": 49,
-     "desc": "Khana fresh rakhe, zaya na ho! 🍱"},
-    {"id": 7, "name": "Orange Exfoliating Gel", "price": 49,
-     "desc": "Naram o mulaim jild ka raaz! 🍊"},
-    {"id": 8, "name": "Mini Steam Iron", "price": 39,
-     "desc": "Kapron ki silwatein secondon me khatam! 👔"},
-    {"id": 9, "name": "16-in-1 Vegetable Chopper", "price": 39,
-     "desc": "Sabzi kaatna ab khel! 🔪"},
-    {"id": 10, "name": "Yandou Shaver", "price": 39,
-     "desc": "Smooth shave, har roz! 🪒"},
-    {"id": 11, "name": "Mini Air Cooler", "price": 49,
-     "desc": "Garmi me thandi hawa ka saathi! ❄️"},
-    {"id": 12, "name": "Car Washer Gun", "price": 59,
-     "desc": "Gari ghar par chamkayein! 🚗"},
-]
+
+def reload_config():
+    """settings.json dobara parh kar module ke config variables refresh karein."""
+    global _CFG, SHOP_NAME, WHATSAPP_NUMBER, CURRENCY, DELIVERY_INFO, \
+        ORDER_PREFIX, PRODUCTS
+    _CFG = load_settings()
+    SHOP_NAME = _CFG["shop_name"]
+    WHATSAPP_NUMBER = _CFG["whatsapp"]
+    CURRENCY = _CFG["currency"]
+    DELIVERY_INFO = _CFG["delivery_info"]
+    ORDER_PREFIX = _CFG["order_prefix"]
+    PRODUCTS = _CFG["products"]
 
 # ------------------------------------------------------- human-like replies
 
@@ -132,6 +126,7 @@ class OrderAgent:
     """Ek customer (phone number) ke liye conversation state machine."""
 
     def __init__(self):
+        reload_config()  # taaza settings uthayein (⚙️ tab se badli hon to)
         self.sessions = {}  # phone -> {"state":..., "product":..., ...}
 
     # -- session helpers -------------------------------------------------
@@ -272,10 +267,10 @@ class OrderAgent:
         if state == "awaiting_confirm":
             if re.search(r"\b(han|haan|yes|confirm|ok|theek|done|sahi)\b", low):
                 p = s["product"]
-                oid = "SHP-" + datetime.now().strftime("%y%m%d%H%M%S")
+                oid = ORDER_PREFIX + "-" + datetime.now().strftime("%y%m%d%H%M%S")
                 order = {"order_id": oid, "phone": phone, "name": s["name"],
                          "city": s["city"], "address": s["address"],
-                         "product": p["name"], "price_aed": p["price"],
+                         "product": p["name"], "price": p["price"],
                          "status": "confirmed",
                          "time": datetime.now().isoformat(timespec="seconds")}
                 self._save_order(order)
@@ -312,7 +307,7 @@ class OrderAgent:
 
 def demo():
     print("=" * 60)
-    print("  Shopora WhatsApp COD Order Agent — DEMO")
+    print("  {} WhatsApp COD Order Agent — DEMO".format(SHOP_NAME))
     print("  (customer ban kar baat karein — 'quit' likh kar niklein)")
     print("=" * 60)
     agent = OrderAgent()

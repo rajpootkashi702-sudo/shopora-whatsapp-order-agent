@@ -1,0 +1,81 @@
+{
+  "shop_name": "Shopora",
+  "currency": "AED",
+  "whatsapp": "+92 319 6800420",
+  "delivery_info": "Cash on Delivery — pooray UAE (7 emirates), 2-4 working days",
+  "order_prefix": "SHP",
+  "products": [
+    {
+      "id": 1,
+      "name": "Smart Sweeping Robot",
+      "price": 59,
+      "desc": "Khud safai kare, aap aaram karein! 🤖"
+    },
+    {
+      "id": 2,
+      "name": "Mini Camera Pen",
+      "price": 59,
+      "desc": "Likhnay wala pen jo video bhi banaye! 🖊️"
+    },
+    {
+      "id": 3,
+      "name": "Kids Instant Print Camera",
+      "price": 59,
+      "desc": "Bachon ka camera — photo kheecho, foran print! 📸"
+    },
+    {
+      "id": 4,
+      "name": "Handheld Steam Cleaner",
+      "price": 69,
+      "desc": "Bijli ki taqat se gehra saaf! ✨"
+    },
+    {
+      "id": 5,
+      "name": "2-in-1 Eyebrow Trimmer",
+      "price": 49,
+      "desc": "Salon wali finishing ghar par! 💅"
+    },
+    {
+      "id": 6,
+      "name": "Vacuum Sealer Machine",
+      "price": 49,
+      "desc": "Khana fresh rakhe, zaya na ho! 🍱"
+    },
+    {
+      "id": 7,
+      "name": "Orange Exfoliating Gel",
+      "price": 49,
+      "desc": "Naram o mulaim jild ka raaz! 🍊"
+    },
+    {
+      "id": 8,
+      "name": "Mini Steam Iron",
+      "price": 39,
+      "desc": "Kapron ki silwatein secondon me khatam! 👔"
+    },
+    {
+      "id": 9,
+      "name": "16-in-1 Vegetable Chopper",
+      "price": 39,
+      "desc": "Sabzi kaatna ab khel! 🔪"
+    },
+    {
+      "id": 10,
+      "name": "Yandou Shaver",
+      "price": 39,
+      "desc": "Smooth shave, har roz! 🪒"
+    },
+    {
+      "id": 11,
+      "name": "Mini Air Cooler",
+      "price": 49,
+      "desc": "Garmi me thandi hawa ka saathi! ❄️"
+    },
+    {
+      "id": 12,
+      "name": "Car Washer Gun",
+      "price": 59,
+      "desc": "Gari ghar par chamkayein! 🚗"
+    }
+  ]
+}
