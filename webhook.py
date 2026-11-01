@@ -122,9 +122,16 @@ def home():
 @app.route("/send_confirm", methods=["POST"])
 def send_confirm():
     """Dashboard se: ek order ke liye WhatsApp confirm message bhejein.
-    Body: {"order_id": "SHO-..."}. Token server-side rehta hai."""
+    Body: poora order dict {"order": {...}} bhejein (dashboard aur webhook
+    alag servers par hain, is liye order_id se lookup nahi ho sakta).
+    Purana format {"order_id": "..."} bhi fallback ke tor par chalta hai.
+    Token server-side rehta hai."""
     from users import get_orders
     data = request.get_json(silent=True) or {}
+    order = data.get("order")
+    if isinstance(order, dict) and order.get("phone"):
+        mid = confirm_agent.send_confirmation(order)
+        return {"ok": bool(mid), "message_id": mid}, 200
     oid = data.get("order_id", "")
     for o in get_orders(ORDER_AGENT_USER):
         if o.get("order_id") == oid:

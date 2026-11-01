@@ -231,7 +231,7 @@ with tab_orders:
                     try:
                         import requests as rq
                         r = rq.post(webhook_url + "/send_confirm",
-                                    json={"order_id": o.get("order_id")},
+                                    json={"order": o},
                                     timeout=25)
                         if r.ok and r.json().get("ok"):
                             st.success("Confirm message bhej diya! ✅")
