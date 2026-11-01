@@ -18,7 +18,39 @@ import streamlit as st
 from agent import OrderAgent
 from config import DEFAULT_SETTINGS
 from users import (ensure_seed, create_user, verify, get_settings,
-                   save_settings_for, get_orders, add_order)
+                   save_settings_for, get_orders, add_order,
+                   update_order_status)
+
+
+def _build_agent(settings, username):
+    """OrderAgent banayein — auto-confirm callback ke saath.
+
+    Naya order bante hi (agar settings me auto_confirm on ho aur
+    phone number asli ho) webhook ko /send_confirm bhej kar
+    WhatsApp Confirm buttons lagwayein.
+    """
+    def _on_order(order):
+        try:
+            if not settings.get("auto_confirm", True):
+                return
+            phone = str(order.get("phone") or "")
+            if not re.fullmatch(r"\+?\d{7,15}", phone):
+                return  # demo chat ("app-customer") — asli number nahi
+            import requests as rq
+            webhook_url = (settings.get("webhook_url")
+                           or "https://salesathi-webhook.onrender.com").rstrip("/")
+            r = rq.post(webhook_url + "/send_confirm",
+                        json={"order": order}, timeout=25)
+            if r.ok and r.json().get("ok"):
+                update_order_status(username, order.get("order_id"),
+                                    "verify_sent")
+                print("auto-confirm sent:", order.get("order_id"))
+        except Exception as e:
+            print("auto-confirm failed:", e)
+
+    return OrderAgent(settings=settings,
+                      save_fn=lambda o: add_order(username, o),
+                      on_order_fn=_on_order)
 
 st.set_page_config(page_title="SaleSathi", page_icon="🤖",
                    layout="centered")
@@ -84,9 +116,8 @@ if not st.session_state.username:
             if verify(u, p):
                 st.session_state.username = u.strip()
                 st.session_state.settings = get_settings(u.strip())
-                st.session_state.agent = OrderAgent(
-                    settings=st.session_state.settings,
-                    save_fn=lambda o: add_order(st.session_state.username, o))
+                st.session_state.agent = _build_agent(
+                    st.session_state.settings, st.session_state.username)
                 st.session_state.chat = []
                 st.rerun()
             else:
@@ -136,9 +167,7 @@ username = st.session_state.username
 settings = st.session_state.settings
 
 if "agent" not in st.session_state:
-    st.session_state.agent = OrderAgent(
-        settings=settings,
-        save_fn=lambda o: add_order(username, o))
+    st.session_state.agent = _build_agent(settings, username)
 if "chat" not in st.session_state:
     st.session_state.chat = []
 if "phone" not in st.session_state:
@@ -189,9 +218,8 @@ with tab_chat:
 
     if st.button("🔄 Nayi chat shuru karein"):
         st.session_state.chat = []
-        st.session_state.agent = OrderAgent(
-            settings=st.session_state.settings,
-            save_fn=lambda o: add_order(username, o))
+        st.session_state.agent = _build_agent(
+            st.session_state.settings, username)
         st.rerun()
 
 with tab_orders:
@@ -261,6 +289,10 @@ with tab_settings:
                              value=s.get("whatsapp", ""))
     delivery = st.text_area("🚚 Delivery info",
                             value=s.get("delivery_info", ""))
+    auto_confirm = st.checkbox(
+        "🤖 Auto-confirm: naya order aate hi customer ko WhatsApp par "
+        "Confirm/Cancel buttons bhejein",
+        value=s.get("auto_confirm", True))
 
     st.subheader("📦 Products")
     st.caption("Neeche table me **direct edit** karein — naam, price, wazahat. "
@@ -311,13 +343,12 @@ with tab_settings:
                 "whatsapp": whatsapp.strip(),
                 "delivery_info": delivery.strip(),
                 "order_prefix": order_prefix.strip() or "SHP",
+                "auto_confirm": bool(auto_confirm),
                 "products": products,
             }
             save_settings_for(username, new_settings)
             st.session_state.settings = new_settings
-            st.session_state.agent = OrderAgent(
-                settings=new_settings,
-                save_fn=lambda o: add_order(username, o))
+            st.session_state.agent = _build_agent(new_settings, username)
             st.success("✅ Save ho gaya! Agent ab **{}** ke naye settings "
                        "par chal raha hai! 🎉".format(new_settings["shop_name"]))
             st.rerun()
@@ -325,9 +356,8 @@ with tab_settings:
     if b2.button("↩️ Reset (default Shopora)", use_container_width=True):
         save_settings_for(username, DEFAULT_SETTINGS)
         st.session_state.settings = get_settings(username)
-        st.session_state.agent = OrderAgent(
-            settings=st.session_state.settings,
-            save_fn=lambda o: add_order(username, o))
+        st.session_state.agent = _build_agent(
+            st.session_state.settings, username)
         st.success("✅ Default settings wapas laga di!")
         st.rerun()
 

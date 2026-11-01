@@ -52,6 +52,20 @@ confirm_agent = ConfirmationAgent(
 print("SaleSathi webhook ready — business: {}".format(ORDER_AGENT_USER))
 
 
+def _auto_confirm(order):
+    """Naya order (real WhatsApp se) aate hi Confirm buttons bhejein."""
+    try:
+        if not get_settings(ORDER_AGENT_USER).get("auto_confirm", True):
+            return
+        mid = confirm_agent.send_confirmation(order)
+        print("auto-confirm sent:", order.get("order_id"), mid)
+    except Exception as e:
+        print("auto-confirm failed:", e)
+
+
+agent.on_order_fn = _auto_confirm
+
+
 def send_whatsapp(to_phone, text):
     """Agent ka jawab wapas customer ko WhatsApp par bhejein."""
     url = "{}/{}/messages".format(GRAPH_URL, PHONE_NUMBER_ID)

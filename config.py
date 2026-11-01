@@ -22,6 +22,7 @@ DEFAULT_SETTINGS = {
     "whatsapp": "+92 319 6800420",
     "delivery_info": "Cash on Delivery — pooray UAE (7 emirates), 2-4 working days",
     "order_prefix": "SHP",
+    "auto_confirm": True,   # naya order bante hi WhatsApp confirm buttons bhejein
     "products": [
         {"id": 1, "name": "Smart Sweeping Robot", "price": 59,
          "desc": "Khud safai kare, aap aaram karein! 🤖", "image": ""},

@@ -130,15 +130,17 @@ class OrderAgent:
 
     settings: is business ki settings dict (config.load_settings() jaisi).
     save_fn:  order save karne ka tareeqa — na dein to orders.json me jayega.
+    on_order_fn: naya order save hote hi call ho (auto-confirm waghera ke liye).
     """
 
-    def __init__(self, settings=None, save_fn=None):
+    def __init__(self, settings=None, save_fn=None, on_order_fn=None):
         self.cfg = dict(settings) if settings else load_settings()
         for k, v in DEFAULT_SETTINGS.items():
             self.cfg.setdefault(k, v)
         if not self.cfg.get("products"):
             self.cfg["products"] = DEFAULT_SETTINGS["products"]
         self.save_fn = save_fn
+        self.on_order_fn = on_order_fn
         self.sessions = {}  # phone -> {"state":..., "product":..., ...}
 
     # -- session helpers -------------------------------------------------
@@ -173,17 +175,23 @@ class OrderAgent:
     def _save_order(self, order):
         if self.save_fn:
             self.save_fn(order)
-            return
-        orders = []
-        if os.path.exists(ORDERS_FILE):
+        else:
+            orders = []
+            if os.path.exists(ORDERS_FILE):
+                try:
+                    with open(ORDERS_FILE, "r", encoding="utf-8") as f:
+                        orders = json.load(f)
+                except (json.JSONDecodeError, OSError):
+                    orders = []
+            orders.append(order)
+            with open(ORDERS_FILE, "w", encoding="utf-8") as f:
+                json.dump(orders, f, ensure_ascii=False, indent=2)
+        # naya order save hua — auto-confirm callback (agar laga ho)
+        if self.on_order_fn:
             try:
-                with open(ORDERS_FILE, "r", encoding="utf-8") as f:
-                    orders = json.load(f)
-            except (json.JSONDecodeError, OSError):
-                orders = []
-        orders.append(order)
-        with open(ORDERS_FILE, "w", encoding="utf-8") as f:
-            json.dump(orders, f, ensure_ascii=False, indent=2)
+                self.on_order_fn(order)
+            except Exception as e:
+                print("on_order_fn failed:", e)
 
     # -- main entry point ------------------------------------------------
     def handle_message(self, phone, text):
