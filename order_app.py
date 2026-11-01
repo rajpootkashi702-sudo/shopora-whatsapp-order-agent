@@ -2,7 +2,7 @@
 ======================
 Multi-business WhatsApp-style order agent.
 
-🔑 Login | 📝 Sign Up (username + password auto-generate)
+🔑 Login | 📝 Sign Up (apna username + password KHUD chunein)
 Har business ka apna: settings, products (tasveeron ke saath!), orders, agent.
 
 Chalayein:
@@ -93,33 +93,40 @@ if not st.session_state.username:
                 st.error("❌ Ghalat username ya password!")
 
     with tab_signup:
-        st.write("**Naya business account banayein** — username aur password "
-                 "khud generate ho jayenge! 🎉")
+        st.write("**Naya business account banayein** — apna username aur "
+                 "password khud chunein! 🎉")
         shop = st.text_input("🏪 Business / Dukaan ka naam *", key="su_shop")
         owner = st.text_input("👤 Aapka naam", key="su_owner")
         wa = st.text_input("📞 WhatsApp number", key="su_wa")
+        new_u = st.text_input("👤 Username chunein * (kam az kam 3 harf)",
+                              key="su_user")
+        new_p = st.text_input("🔑 Password chunein * (kam az kam 4 harf)",
+                              type="password", key="su_pass")
+        new_p2 = st.text_input("🔑 Password dobara likhein *",
+                               type="password", key="su_pass2")
         if st.button("✨ Account Banayein", use_container_width=True):
             if not shop.strip():
                 st.error("❌ Business ka naam to likhein!")
+            elif not new_u.strip():
+                st.error("❌ Username to chunein!")
+            elif new_p != new_p2:
+                st.error("❌ Dono password mil nahi rahe — dobara likhein!")
             else:
-                username, password = create_user(shop, owner, wa)
-                st.session_state.new_cred = (username, password)
-                st.rerun()
+                try:
+                    username = create_user(shop, new_u, new_p, owner, wa)
+                except ValueError as e:
+                    st.error("❌ {}".format(e))
+                else:
+                    st.session_state.new_user = username
+                    st.rerun()
 
-    # sign-up ke baad credentials bari screen par dikhayein
-    if st.session_state.get("new_cred"):
-        username, password = st.session_state.new_cred
-        st.success("🎉 **Account ban gaya!** Neeche login details **screenshot "
-                   "me save kar lein** — password dobara nahi dikhega!")
-        st.write("👤 Username:")
-        st.markdown('<div class="big-cred">{}</div>'.format(username),
-                    unsafe_allow_html=True)
-        st.write("🔑 Password:")
-        st.markdown('<div class="big-cred">{}</div>'.format(password),
-                    unsafe_allow_html=True)
-        if st.button("✅ Samajh gaya — Login par jayein",
-                     use_container_width=True):
-            del st.session_state.new_cred
+    # sign-up ke baad kamyabi ka paigham — login tab par bhejein
+    if st.session_state.get("new_user"):
+        st.success("🎉 **Account ban gaya, {}!** Ab 🔑 Login tab me apna "
+                   "username aur password likh kar login karein!".format(
+                       st.session_state.new_user))
+        if st.button("✅ Login par jayein", use_container_width=True):
+            del st.session_state.new_user
             st.rerun()
 
     st.stop()
