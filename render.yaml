@@ -1,0 +1,18 @@
+# Render.com one-click deploy — SaleSathi WhatsApp Webhook
+# https://dashboard.render.com → New → Blueprint → repo select karein
+services:
+  - type: web
+    name: salesathi-webhook
+    runtime: python
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "gunicorn webhook:app"
+    envVars:
+      - key: WEBHOOK_VERIFY_TOKEN
+        value: shopora123
+      - key: WHATSAPP_TOKEN
+        sync: false          # Meta se milne ke baad yahan bharein
+      - key: PHONE_NUMBER_ID
+        sync: false          # Meta se milne ke baad yahan bharein
+      - key: ORDER_AGENT_USER
+        value: admin         # jis business ka WhatsApp jura ho

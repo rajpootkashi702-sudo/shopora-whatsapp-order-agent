@@ -1,14 +1,19 @@
 """
-Shopora WhatsApp Webhook Server 🌐💬
-====================================
-Meta WhatsApp Business Cloud API se aane wale messages ko OrderAgent se jorta hai.
+SaleSathi WhatsApp Webhook Server 🌐💬
+=====================================
+Meta WhatsApp Business Cloud API se aane wale customer messages ko
+SaleSathi agent se jorta hai — customer likhe, agent foran jawab de!
+
+Multi-user: jis business ka WhatsApp number jura ho, usi ki settings
+(ORDER_AGENT_USER env se, default: admin) istemal hoti hain aur orders
+usi ke account me save hote hain.
 
 Setup:
   1. https://developers.facebook.com → nayi App → WhatsApp product add karein
-  2. Apna WhatsApp Business number jorein, temporary Access Token lein
-  3. Neeche WEBHOOK_VERIFY_TOKEN aur WHATSAPP_TOKEN bharein
-  4. Is file ko public URL par chalayein (Render.com / Railway.app free)
-     aur wo URL Meta dashboard me Webhook ke tor par lagayein
+  2. WhatsApp Business number jorein (alag number — personal WhatsApp wala nahi),
+     temporary Access Token + Phone Number ID lein
+  3. Neeche env vars set karein, is file ko public URL par chalayein
+     (Render.com / Railway.app free), wo URL Meta me Webhook lagayein
 
 Chalayein:
   pip install flask requests
@@ -20,6 +25,7 @@ import requests
 from flask import Flask, request
 
 from agent import OrderAgent
+from users import ensure_seed, get_settings, add_order
 
 # ------------------------------------------------------------ settings
 # Inhe apni asal values se badlein (ya environment variables me rakhein)
@@ -27,9 +33,17 @@ WEBHOOK_VERIFY_TOKEN = os.environ.get("WEBHOOK_VERIFY_TOKEN", "shopora123")
 WHATSAPP_TOKEN = os.environ.get("WHATSAPP_TOKEN", "PASTE_YOUR_TOKEN_HERE")
 PHONE_NUMBER_ID = os.environ.get("PHONE_NUMBER_ID", "PASTE_PHONE_NUMBER_ID")
 GRAPH_URL = "https://graph.facebook.com/v21.0"
+# Kaun se business account ki settings/orders istemal hon (default: admin)
+ORDER_AGENT_USER = os.environ.get("ORDER_AGENT_USER", "admin")
 
 app = Flask(__name__)
-agent = OrderAgent()
+
+ensure_seed()
+agent = OrderAgent(
+    settings=get_settings(ORDER_AGENT_USER),
+    save_fn=lambda o: add_order(ORDER_AGENT_USER, o),
+)
+print("SaleSathi webhook ready — business: {}".format(ORDER_AGENT_USER))
 
 
 def send_whatsapp(to_phone, text):
@@ -82,7 +96,7 @@ def incoming():
 
 @app.route("/", methods=["GET"])
 def home():
-    return "Shopora Order Agent webhook chal raha hai! ✅", 200
+    return "SaleSathi webhook chal raha hai! ✅", 200
 
 
 if __name__ == "__main__":
