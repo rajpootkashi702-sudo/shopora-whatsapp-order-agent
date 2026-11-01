@@ -1,5 +1,5 @@
 """
-SaleSathi COD Order Confirmation Agent ✅📲
+Sales Assistant COD Order Confirmation Agent ✅📲
 ==========================================
 Har COD order ke baad customer ko WhatsApp par "tap to confirm" message
 bhejta hai — fake/cancel orders dispatch se PEHLE pakre jate hain.

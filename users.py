@@ -12,6 +12,8 @@ import hashlib
 import json
 import os
 import re
+import secrets
+import time
 
 from config import load_settings, DEFAULT_SETTINGS
 
@@ -85,6 +87,42 @@ def verify(username, password):
     users = load_users()["users"]
     u = users.get((username or "").strip())
     return bool(u and u.get("password_hash") == _hash(password or ""))
+
+
+def create_session_token(username, days=30):
+    """'Remember me' token — login ke baad 30 din tak dobara login nahi."""
+    data = load_users()
+    u = data["users"].get(username)
+    if not u:
+        return None
+    token = secrets.token_urlsafe(32)
+    u["session_token_hash"] = hashlib.sha256(token.encode()).hexdigest()
+    u["session_token_exp"] = time.time() + days * 86400
+    save_users(data)
+    return token
+
+
+def verify_session_token(token):
+    """Cookie wale token se username nikalein — ghalat/expired par None."""
+    if not token:
+        return None
+    h = hashlib.sha256(token.encode()).hexdigest()
+    now = time.time()
+    for uname, u in load_users()["users"].items():
+        if (u.get("session_token_hash") == h
+                and u.get("session_token_exp", 0) > now):
+            return uname
+    return None
+
+
+def revoke_session_token(username):
+    """Logout par token khatam — agle dafa login mangega."""
+    data = load_users()
+    u = data["users"].get(username)
+    if u:
+        u.pop("session_token_hash", None)
+        u.pop("session_token_exp", None)
+        save_users(data)
 
 
 def get_settings(username):

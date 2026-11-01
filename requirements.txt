@@ -1,5 +1,6 @@
+extra-streamlit-components
 flask>=3.0
-requests>=2.31
 gunicorn>=21.0
-streamlit>=1.28
 pandas>=2.0
+requests>=2.31
+streamlit>=1.32

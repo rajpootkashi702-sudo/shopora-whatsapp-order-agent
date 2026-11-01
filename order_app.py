@@ -1,5 +1,5 @@
-"""SaleSathi — Mobile App 📱
-======================
+"""Sales Assistant — Mobile App 📱
+==============================
 Multi-business WhatsApp-style order agent.
 
 🔑 Login | 📝 Sign Up (apna username + password KHUD chunein)
@@ -11,15 +11,18 @@ Chalayein:
 
 import os
 import re
+from datetime import datetime, timedelta
 
 import pandas as pd
 import streamlit as st
+from extra_streamlit_components import CookieManager
 
 from agent import OrderAgent
 from config import DEFAULT_SETTINGS
 from users import (ensure_seed, create_user, verify, get_settings,
                    save_settings_for, get_orders, add_order,
-                   update_order_status)
+                   update_order_status, create_session_token,
+                   verify_session_token, revoke_session_token)
 
 
 def _build_agent(settings, username):
@@ -52,10 +55,24 @@ def _build_agent(settings, username):
                       save_fn=lambda o: add_order(username, o),
                       on_order_fn=_on_order)
 
-st.set_page_config(page_title="SaleSathi", page_icon="🤖",
+st.set_page_config(page_title="Sales Assistant", page_icon="🤖",
                    layout="centered")
 
 ensure_seed()  # pehli dafa purana admin migrate ho jaye
+
+# ------------------------------------------------------------ remember-me
+# Ek dafa login → 30 din tak cookie me token → dobara login nahi mangega.
+# Logout khud karein to cookie + token dono khatam.
+_cookies = CookieManager()
+_SS_COOKIE = "sa_token"
+
+
+def _do_login(username):
+    st.session_state.username = username
+    st.session_state.settings = get_settings(username)
+    st.session_state.agent = _build_agent(
+        st.session_state.settings, username)
+    st.session_state.chat = []
 
 # ------------------------------------------------------------ mobile CSS
 st.markdown("""
@@ -103,10 +120,18 @@ def _show_product_images(reply_text, settings):
 if "username" not in st.session_state:
     st.session_state.username = ""
 
+# Cookie me purana token ho to khud-ba-khud login (remember me)
 if not st.session_state.username:
-    st.title("🤖 SaleSathi")
+    _saved = _cookies.get(_SS_COOKIE)
+    _auto_user = verify_session_token(_saved) if _saved else None
+    if _auto_user:
+        _do_login(_auto_user)
+        st.rerun()
+
+if not st.session_state.username:
+    st.title("🤖 Sales Assistant")
     st.caption("Apne business ke liye AI order-taking agent! "
-               "Aapka apna sales sathi! 💪")
+               "Aapka apna sales assistant! 💪")
     tab_login, tab_signup = st.tabs(["🔑 Login", "📝 Sign Up"])
 
     with tab_login:
@@ -114,11 +139,12 @@ if not st.session_state.username:
         p = st.text_input("Password", type="password", key="login_p")
         if st.button("➡️ Login", use_container_width=True):
             if verify(u, p):
-                st.session_state.username = u.strip()
-                st.session_state.settings = get_settings(u.strip())
-                st.session_state.agent = _build_agent(
-                    st.session_state.settings, st.session_state.username)
-                st.session_state.chat = []
+                _do_login(u.strip())
+                # 30 din ka remember-me cookie lagayein
+                _tok = create_session_token(u.strip())
+                if _tok:
+                    _cookies.set(_SS_COOKIE, _tok,
+                                 expires_at=datetime.now() + timedelta(days=30))
                 st.rerun()
             else:
                 st.error("❌ Ghalat username ya password!")
@@ -179,8 +205,10 @@ tab_chat, tab_orders, tab_settings = st.tabs(
 with tab_chat:
     st.title("🤖 {} Order Agent".format(settings["shop_name"]))
     st.caption("Customer ban kar baat karein — bilkul WhatsApp jaisa! "
-               "| 👤 {} | ⚡ by SaleSathi".format(username))
+               "| 👤 {} | ⚡ by Sales Assistant".format(username))
     if st.button("🚪 Logout"):
+        revoke_session_token(username)
+        _cookies.delete(_SS_COOKIE)
         for k in ("username", "settings", "agent", "chat"):
             st.session_state.pop(k, None)
         st.rerun()

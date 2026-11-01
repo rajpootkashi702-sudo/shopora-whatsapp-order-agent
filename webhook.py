@@ -1,8 +1,8 @@
 """
-SaleSathi WhatsApp Webhook Server 🌐💬
+Sales Assistant WhatsApp Webhook Server 🌐💬
 =====================================
 Meta WhatsApp Business Cloud API se aane wale customer messages ko
-SaleSathi agent se jorta hai — customer likhe, agent foran jawab de!
+Sales Assistant agent se jorta hai — customer likhe, agent foran jawab de!
 
 Multi-user: jis business ka WhatsApp number jura ho, usi ki settings
 (ORDER_AGENT_USER env se, default: admin) istemal hoti hain aur orders
@@ -49,7 +49,7 @@ confirm_agent = ConfirmationAgent(
     phone_number_id=PHONE_NUMBER_ID,
     update_status_fn=lambda oid, st: update_order_status(ORDER_AGENT_USER, oid, st),
 )
-print("SaleSathi webhook ready — business: {}".format(ORDER_AGENT_USER))
+print("Sales Assistant webhook ready — business: {}".format(ORDER_AGENT_USER))
 
 
 def _auto_confirm(order):
@@ -130,7 +130,7 @@ def incoming():
 
 @app.route("/", methods=["GET"])
 def home():
-    return "SaleSathi webhook chal raha hai! ✅", 200
+    return "Sales Assistant webhook chal raha hai! ✅", 200
 
 
 @app.route("/send_confirm", methods=["POST"])
