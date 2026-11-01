@@ -24,29 +24,29 @@ DEFAULT_SETTINGS = {
     "order_prefix": "SHP",
     "products": [
         {"id": 1, "name": "Smart Sweeping Robot", "price": 59,
-         "desc": "Khud safai kare, aap aaram karein! 🤖"},
+         "desc": "Khud safai kare, aap aaram karein! 🤖", "image": ""},
         {"id": 2, "name": "Mini Camera Pen", "price": 59,
-         "desc": "Likhnay wala pen jo video bhi banaye! 🖊️"},
+         "desc": "Likhnay wala pen jo video bhi banaye! 🖊️", "image": ""},
         {"id": 3, "name": "Kids Instant Print Camera", "price": 59,
-         "desc": "Bachon ka camera — photo kheecho, foran print! 📸"},
+         "desc": "Bachon ka camera — photo kheecho, foran print! 📸", "image": ""},
         {"id": 4, "name": "Handheld Steam Cleaner", "price": 69,
-         "desc": "Bijli ki taqat se gehra saaf! ✨"},
+         "desc": "Bijli ki taqat se gehra saaf! ✨", "image": ""},
         {"id": 5, "name": "2-in-1 Eyebrow Trimmer", "price": 49,
-         "desc": "Salon wali finishing ghar par! 💅"},
+         "desc": "Salon wali finishing ghar par! 💅", "image": ""},
         {"id": 6, "name": "Vacuum Sealer Machine", "price": 49,
-         "desc": "Khana fresh rakhe, zaya na ho! 🍱"},
+         "desc": "Khana fresh rakhe, zaya na ho! 🍱", "image": ""},
         {"id": 7, "name": "Orange Exfoliating Gel", "price": 49,
-         "desc": "Naram o mulaim jild ka raaz! 🍊"},
+         "desc": "Naram o mulaim jild ka raaz! 🍊", "image": ""},
         {"id": 8, "name": "Mini Steam Iron", "price": 39,
-         "desc": "Kapron ki silwatein secondon me khatam! 👔"},
+         "desc": "Kapron ki silwatein secondon me khatam! 👔", "image": ""},
         {"id": 9, "name": "16-in-1 Vegetable Chopper", "price": 39,
-         "desc": "Sabzi kaatna ab khel! 🔪"},
+         "desc": "Sabzi kaatna ab khel! 🔪", "image": ""},
         {"id": 10, "name": "Yandou Shaver", "price": 39,
-         "desc": "Smooth shave, har roz! 🪒"},
+         "desc": "Smooth shave, har roz! 🪒", "image": ""},
         {"id": 11, "name": "Mini Air Cooler", "price": 49,
-         "desc": "Garmi me thandi hawa ka saathi! ❄️"},
+         "desc": "Garmi me thandi hawa ka saathi! ❄️", "image": ""},
         {"id": 12, "name": "Car Washer Gun", "price": 59,
-         "desc": "Gari ghar par chamkayein! 🚗"},
+         "desc": "Gari ghar par chamkayein! 🚗", "image": ""},
     ],
 }
 
@@ -68,6 +68,7 @@ def load_settings():
                 p.setdefault("name", "Product {}".format(i))
                 p.setdefault("price", 0)
                 p.setdefault("desc", "")
+                p.setdefault("image", "")
             return merged
         except (json.JSONDecodeError, OSError, AttributeError):
             pass
@@ -85,6 +86,7 @@ def save_settings(settings):
             "name": str(p.get("name", "")).strip() or "Product {}".format(i),
             "price": p.get("price", 0),
             "desc": str(p.get("desc", "")).strip(),
+            "image": str(p.get("image", "")).strip(),
         })
     clean["products"] = products
     with open(CONFIG_PATH, "w", encoding="utf-8") as f:

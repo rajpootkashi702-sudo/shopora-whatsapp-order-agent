@@ -3,11 +3,14 @@
 Multi-business WhatsApp-style order agent.
 
 🔑 Login | 📝 Sign Up (username + password auto-generate)
-Har business ka apna: settings, products, orders, agent.
+Har business ka apna: settings, products (tasveeron ke saath!), orders, agent.
 
 Chalayein:
   streamlit run order_app.py
 """
+
+import os
+import re
 
 import pandas as pd
 import streamlit as st
@@ -34,6 +37,35 @@ st.markdown("""
             padding: 0.6rem 1rem; border-radius: 0.5rem; text-align: center; }
 </style>
 """, unsafe_allow_html=True)
+
+
+def _img_ok(path):
+    """Local file ho to maujood hona chahiye, URL ho to theek hai."""
+    if not path:
+        return False
+    if re.match(r"^https?://", path):
+        return True
+    return os.path.exists(path)
+
+
+def _show_product_images(reply_text, settings):
+    """Agent ke jawab me jin products ka zikr ho, unki tasveer dikhayein."""
+    prods = settings.get("products", [])
+    cur = settings.get("currency", "")
+    low = (reply_text or "").lower()
+    # poori list wali surat me sab dikhayein
+    show_all = "products ki list" in low
+    hits = [p for p in prods
+            if _img_ok(p.get("image"))
+            and (show_all or p["name"].lower() in low)]
+    if not hits:
+        return
+    cols = st.columns(min(3, len(hits)))
+    for col, p in zip(cols, hits[:6]):
+        with col:
+            st.image(p["image"],
+                     caption="{} — {} {}".format(p["name"], p["price"], cur),
+                     use_container_width=True)
 
 # ------------------------------------------------------------ auth screen
 if "username" not in st.session_state:
@@ -117,9 +149,24 @@ with tab_chat:
             st.session_state.pop(k, None)
         st.rerun()
 
+    # 🛍️ visual catalog — tasveeron wala
+    _catalog = [p for p in settings.get("products", []) if _img_ok(p.get("image"))]
+    if _catalog:
+        with st.expander("🛍️ Products ki tasveerain dekhein", expanded=False):
+            _cols = st.columns(3)
+            for _i, _p in enumerate(_catalog):
+                with _cols[_i % 3]:
+                    st.image(_p["image"],
+                             caption="{} — {} {}".format(
+                                 _p["name"], _p["price"],
+                                 settings.get("currency", "")),
+                             use_container_width=True)
+
     for who, text in st.session_state.chat:
         with st.chat_message(who):
             st.write(text)
+        if who == "assistant":
+            _show_product_images(text, st.session_state.settings)
 
     prompt = st.chat_input("Message likhein...")
     if prompt:
@@ -131,6 +178,7 @@ with tab_chat:
         st.session_state.chat.append(("assistant", reply))
         with st.chat_message("assistant"):
             st.write(reply)
+        _show_product_images(reply, st.session_state.settings)
 
     if st.button("🔄 Nayi chat shuru karein"):
         st.session_state.chat = []
@@ -203,6 +251,9 @@ with tab_settings:
     b1, b2 = st.columns(2)
     if b1.button("💾 Save Settings", use_container_width=True):
         products = []
+        # purani tasveerain naam se milayein taake zaya na hon
+        _old_imgs = {p.get("name"): p.get("image", "")
+                     for p in s.get("products", [])}
         for i, row in enumerate(edited.to_dict("records"), 1):
             name = str(row.get("name", "")).strip()
             if not name:
@@ -212,7 +263,8 @@ with tab_settings:
             except (TypeError, ValueError):
                 price = 0
             products.append({"id": i, "name": name, "price": price,
-                             "desc": str(row.get("desc", "")).strip()})
+                             "desc": str(row.get("desc", "")).strip(),
+                             "image": _old_imgs.get(name, "")})
         if not products:
             st.error("❌ Kam az kam 1 product to rakhein!")
         else:
@@ -241,3 +293,53 @@ with tab_settings:
             save_fn=lambda o: add_order(username, o))
         st.success("✅ Default settings wapas laga di!")
         st.rerun()
+
+    st.divider()
+    st.subheader("🖼️ Product ki Photo")
+    st.caption("Har product ki tasveer lagayein — customer ko chat me "
+               "tasveer ke saath nazar aayega! 📷")
+    _prods = st.session_state.settings.get("products", [])
+    if _prods:
+        _pname = st.selectbox("Product chunein",
+                              [p["name"] for p in _prods],
+                              key="photo_product")
+        _pobj = next(p for p in _prods if p["name"] == _pname)
+        _cu, _cl = st.columns(2)
+        _up = _cu.file_uploader("📤 Photo upload karein",
+                                type=["png", "jpg", "jpeg", "webp"],
+                                key="photo_upload")
+        _url = _cl.text_input("🔗 ya photo ka link (URL) lagayein",
+                              key="photo_url")
+        if _img_ok(_pobj.get("image")):
+            st.image(_pobj["image"], width=220, caption="Maujooda photo")
+        _b1, _b2 = st.columns(2)
+        if _b1.button("💾 Photo save karein", use_container_width=True,
+                      key="photo_save"):
+            _img_val = _pobj.get("image", "")
+            if _up is not None:
+                _ext = _up.name.rsplit(".", 1)[-1].lower() or "jpg"
+                _slug = re.sub(r"[^a-z0-9]+", "",
+                               _pname.lower())[:20] or "product"
+                os.makedirs("product_images", exist_ok=True)
+                _fname = "product_images/{}_{}.{}".format(username, _slug,
+                                                          _ext)
+                with open(_fname, "wb") as _f:
+                    _f.write(_up.getbuffer())
+                _img_val = _fname
+            elif _url.strip():
+                _img_val = _url.strip()
+            if _img_val:
+                _pobj["image"] = _img_val
+                save_settings_for(username, st.session_state.settings)
+                st.success("✅ Photo lag gayi! Ab chat me tasveer ke "
+                           "saath nazar aayega! 🎉")
+                st.rerun()
+            else:
+                st.warning("Pehle photo upload karein ya link likhein!")
+        if _img_ok(_pobj.get("image")) and _b2.button(
+                "🗑️ Photo hatayein", use_container_width=True,
+                key="photo_del"):
+            _pobj["image"] = ""
+            save_settings_for(username, st.session_state.settings)
+            st.success("✅ Photo hata di!")
+            st.rerun()
