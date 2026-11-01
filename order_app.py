@@ -211,6 +211,36 @@ with tab_orders:
         csv = df.to_csv(index=False).encode("utf-8-sig")
         st.download_button("⬇️ CSV Download", csv,
                            "orders_{}.csv".format(username), "text/csv")
+
+        # ---- COD Confirmation Agent ----
+        st.subheader("✅ COD Confirmation")
+        st.caption("Customer ko WhatsApp par Confirm/Cancel buttons bhejein — "
+                   "fake orders dispatch se pehle pakrein!")
+        webhook_url = (settings.get("webhook_url")
+                       or "https://salesathi-webhook.onrender.com").rstrip("/")
+        need = [o for o in orders
+                if o.get("status") in ("confirmed", "pending", "verify_reminded")]
+        if need:
+            for o in need:
+                c1, c2 = st.columns([4, 1])
+                c1.write("🧾 {} — {} ({} {}) — *{}*".format(
+                    o.get("order_id"), o.get("product"),
+                    o.get("price"), settings.get("currency", "AED"),
+                    o.get("status")))
+                if c2.button("📲 Confirm", key="cf_" + str(o.get("order_id"))):
+                    try:
+                        import requests as rq
+                        r = rq.post(webhook_url + "/send_confirm",
+                                    json={"order_id": o.get("order_id")},
+                                    timeout=25)
+                        if r.ok and r.json().get("ok"):
+                            st.success("Confirm message bhej diya! ✅")
+                        else:
+                            st.error("Nahi bheja: {}".format(r.text[:120]))
+                    except Exception as e:
+                        st.error("Webhook se rabta nahi: {}".format(e))
+        else:
+            st.info("Sab orders verified ya cancelled hain. 🎉")
     else:
         st.info("Abhi koi order nahi — pehle 💬 chat me order karein!")
 

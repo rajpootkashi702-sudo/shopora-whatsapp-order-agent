@@ -114,6 +114,22 @@ def add_order(username, order):
         save_users(data)
 
 
+def update_order_status(username, order_id, new_status):
+    """Ek order ka status badlein (confirmation agent ke liye)."""
+    data = load_users()
+    u = data["users"].get(username)
+    if not u:
+        return False
+    for o in u.get("orders") or []:
+        if o.get("order_id") == order_id:
+            o["status"] = new_status
+            save_users(data)
+            print("Order", order_id, "->", new_status)
+            return True
+    print("Order not found:", order_id)
+    return False
+
+
 def ensure_seed():
     """Pehli dafa: purana admin (admin/shopora2026) migrate karein.
 

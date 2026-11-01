@@ -25,7 +25,8 @@ import requests
 from flask import Flask, request
 
 from agent import OrderAgent
-from users import ensure_seed, get_settings, add_order
+from users import ensure_seed, get_settings, add_order, update_order_status
+from confirm_agent import ConfirmationAgent
 
 # ------------------------------------------------------------ settings
 # Inhe apni asal values se badlein (ya environment variables me rakhein)
@@ -42,6 +43,11 @@ ensure_seed()
 agent = OrderAgent(
     settings=get_settings(ORDER_AGENT_USER),
     save_fn=lambda o: add_order(ORDER_AGENT_USER, o),
+)
+confirm_agent = ConfirmationAgent(
+    token=WHATSAPP_TOKEN,
+    phone_number_id=PHONE_NUMBER_ID,
+    update_status_fn=lambda oid, st: update_order_status(ORDER_AGENT_USER, oid, st),
 )
 print("SaleSathi webhook ready — business: {}".format(ORDER_AGENT_USER))
 
@@ -84,9 +90,21 @@ def incoming():
         entry = data["entry"][0]["changes"][0]["value"]
         messages = entry.get("messages") or []
         for msg in messages:
-            if msg.get("type") != "text":
-                continue
+            mtype = msg.get("type")
             phone = msg["from"]
+            if mtype == "interactive":
+                # Confirm/Cancel button ka jawab (confirmation agent)
+                try:
+                    button_id = msg["interactive"]["button_reply"]["id"]
+                except (KeyError, TypeError):
+                    continue
+                print("Incoming button <-", phone, ":", button_id)
+                reply = confirm_agent.handle_button_reply(phone, button_id)
+                if reply:
+                    send_whatsapp(phone, reply)
+                continue
+            if mtype != "text":
+                continue
             text = msg["text"]["body"]
             print("Incoming <-", phone, ":", text)
             reply = agent.handle_message(phone, text)
@@ -99,6 +117,20 @@ def incoming():
 @app.route("/", methods=["GET"])
 def home():
     return "SaleSathi webhook chal raha hai! ✅", 200
+
+
+@app.route("/send_confirm", methods=["POST"])
+def send_confirm():
+    """Dashboard se: ek order ke liye WhatsApp confirm message bhejein.
+    Body: {"order_id": "SHO-..."}. Token server-side rehta hai."""
+    from users import get_orders
+    data = request.get_json(silent=True) or {}
+    oid = data.get("order_id", "")
+    for o in get_orders(ORDER_AGENT_USER):
+        if o.get("order_id") == oid:
+            mid = confirm_agent.send_confirmation(o)
+            return {"ok": bool(mid), "message_id": mid}, 200
+    return {"ok": False, "error": "order not found"}, 404
 
 
 if __name__ == "__main__":
