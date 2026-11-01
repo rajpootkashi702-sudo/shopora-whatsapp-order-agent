@@ -22,7 +22,7 @@ st.set_page_config(page_title="Shopora Order Agent", page_icon="🤖",
 # NOTE: Ye demo-level lock hai. Repo PUBLIC hai to ye password sab dekh
 # sakte hain — asal security ke liye Streamlit Secrets use karein.
 APP_USERS = {
-    "admin": "shopora123",
+    "admin": "shopora2026",
 }
 
 
