@@ -17,6 +17,40 @@ from agent import OrderAgent, ORDERS_FILE, SHOP_NAME
 st.set_page_config(page_title="Shopora Order Agent", page_icon="🤖",
                    layout="centered")
 
+# ------------------------------------------------------------ simple login
+# 🔑 APNA LOGIN YAHAN SET KAREIN (username: password)
+# NOTE: Ye demo-level lock hai. Repo PUBLIC hai to ye password sab dekh
+# sakte hain — asal security ke liye Streamlit Secrets use karein.
+APP_USERS = {
+    "admin": "shopora123",
+}
+
+
+def _check_login(username, password):
+    return APP_USERS.get(username.strip()) == password
+
+
+if "logged_in" not in st.session_state:
+    st.session_state.logged_in = False
+if "login_user" not in st.session_state:
+    st.session_state.login_user = ""
+
+if not st.session_state.logged_in:
+    st.title("🔐 Shopora Order Agent")
+    st.caption("Login karke andar jayein")
+    u = st.text_input("Username", key="login_u")
+    p = st.text_input("Password", type="password", key="login_p")
+    if st.button("➡️ Login", use_container_width=True):
+        if _check_login(u, p):
+            st.session_state.logged_in = True
+            st.session_state.login_user = u.strip()
+            st.rerun()
+        else:
+            st.error("❌ Ghalat username ya password! Dobara try karein.")
+    st.stop()
+
+# ------------------------------------------------------------ mobile CSS
+
 # Mobile-friendly tweaks
 st.markdown("""
 <style>
@@ -39,7 +73,13 @@ tab_chat, tab_orders = st.tabs(["💬 Customer Chat", "📦 Orders"])
 
 with tab_chat:
     st.title("🤖 {} Order Agent".format(SHOP_NAME))
-    st.caption("Customer ban kar baat karein — bilkul WhatsApp jaisa!")
+    st.caption("Customer ban kar baat karein — bilkul WhatsApp jaisa! "
+               "| 👤 {} | ".format(st.session_state.login_user))
+    if st.button("🚪 Logout"):
+        st.session_state.logged_in = False
+        st.session_state.login_user = ""
+        st.session_state.chat = []
+        st.rerun()
 
     for who, text in st.session_state.chat:
         with st.chat_message(who):
