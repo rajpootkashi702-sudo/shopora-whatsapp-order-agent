@@ -58,6 +58,8 @@ def send_whatsapp(to_phone, text):
     try:
         r = requests.post(url, headers=headers, json=payload, timeout=20)
         print("Sent ->", to_phone, r.status_code)
+        if r.status_code >= 400:
+            print("Send error body:", r.text[:500])
     except Exception as e:
         print("Send failed:", e)
 
