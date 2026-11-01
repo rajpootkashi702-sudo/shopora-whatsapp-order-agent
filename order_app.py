@@ -1,66 +1,28 @@
 """Order Agent — Mobile App 📱
 ============================
-Har business ke liye configurable WhatsApp-style order agent.
+Multi-business WhatsApp-style order agent.
 
-Tabs: 💬 Customer Chat (WhatsApp jaisa) + 📦 Orders dashboard + ⚙️ Settings
-(Settings me dukaan ka naam, products, prices, WhatsApp number sab badlein!)
+🔑 Login | 📝 Sign Up (username + password auto-generate)
+Har business ka apna: settings, products, orders, agent.
 
 Chalayein:
   streamlit run order_app.py
 """
 
-import json
-import os
-
 import pandas as pd
 import streamlit as st
 
-from agent import OrderAgent, ORDERS_FILE, reload_config
-from config import load_settings, save_settings, DEFAULT_SETTINGS
+from agent import OrderAgent
+from config import DEFAULT_SETTINGS
+from users import (ensure_seed, create_user, verify, get_settings,
+                   save_settings_for, get_orders, add_order)
 
 st.set_page_config(page_title="Order Agent", page_icon="🤖",
                    layout="centered")
 
-# Settings sab se pehle (login screen par bhi dukaan ka naam dikhe)
-if "settings" not in st.session_state:
-    st.session_state.settings = load_settings()
-settings = st.session_state.settings
-
-# ------------------------------------------------------------ simple login
-# 🔑 APNA LOGIN YAHAN SET KAREIN (username: password)
-# NOTE: Ye demo-level lock hai. Repo PUBLIC hai to ye password sab dekh
-# sakte hain — asal security ke liye Streamlit Secrets use karein.
-APP_USERS = {
-    "admin": "shopora2026",
-}
-
-
-def _check_login(username, password):
-    return APP_USERS.get(username.strip()) == password
-
-
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "login_user" not in st.session_state:
-    st.session_state.login_user = ""
-
-if not st.session_state.logged_in:
-    st.title("🔐 {} Order Agent".format(settings["shop_name"]))
-    st.caption("Login karke andar jayein")
-    u = st.text_input("Username", key="login_u")
-    p = st.text_input("Password", type="password", key="login_p")
-    if st.button("➡️ Login", use_container_width=True):
-        if _check_login(u, p):
-            st.session_state.logged_in = True
-            st.session_state.login_user = u.strip()
-            st.rerun()
-        else:
-            st.error("❌ Ghalat username ya password! Dobara try karein.")
-    st.stop()
+ensure_seed()  # pehli dafa purana admin migrate ho jaye
 
 # ------------------------------------------------------------ mobile CSS
-
-# Mobile-friendly tweaks
 st.markdown("""
 <style>
 @media (max-width: 640px) {
@@ -68,11 +30,75 @@ st.markdown("""
     h1 { font-size: 1.6rem !important; }
     .stButton > button { width: 100%; padding: 0.75rem 1rem; font-size: 1rem; }
 }
+.big-cred { font-size: 1.4rem; font-weight: bold; background: #f0f2f6;
+            padding: 0.6rem 1rem; border-radius: 0.5rem; text-align: center; }
 </style>
 """, unsafe_allow_html=True)
 
+# ------------------------------------------------------------ auth screen
+if "username" not in st.session_state:
+    st.session_state.username = ""
+
+if not st.session_state.username:
+    st.title("🤖 Order Agent")
+    st.caption("Apne business ke liye AI order-taking agent!")
+    tab_login, tab_signup = st.tabs(["🔑 Login", "📝 Sign Up"])
+
+    with tab_login:
+        u = st.text_input("Username", key="login_u")
+        p = st.text_input("Password", type="password", key="login_p")
+        if st.button("➡️ Login", use_container_width=True):
+            if verify(u, p):
+                st.session_state.username = u.strip()
+                st.session_state.settings = get_settings(u.strip())
+                st.session_state.agent = OrderAgent(
+                    settings=st.session_state.settings,
+                    save_fn=lambda o: add_order(st.session_state.username, o))
+                st.session_state.chat = []
+                st.rerun()
+            else:
+                st.error("❌ Ghalat username ya password!")
+
+    with tab_signup:
+        st.write("**Naya business account banayein** — username aur password "
+                 "khud generate ho jayenge! 🎉")
+        shop = st.text_input("🏪 Business / Dukaan ka naam *", key="su_shop")
+        owner = st.text_input("👤 Aapka naam", key="su_owner")
+        wa = st.text_input("📞 WhatsApp number", key="su_wa")
+        if st.button("✨ Account Banayein", use_container_width=True):
+            if not shop.strip():
+                st.error("❌ Business ka naam to likhein!")
+            else:
+                username, password = create_user(shop, owner, wa)
+                st.session_state.new_cred = (username, password)
+                st.rerun()
+
+    # sign-up ke baad credentials bari screen par dikhayein
+    if st.session_state.get("new_cred"):
+        username, password = st.session_state.new_cred
+        st.success("🎉 **Account ban gaya!** Neeche login details **screenshot "
+                   "me save kar lein** — password dobara nahi dikhega!")
+        st.write("👤 Username:")
+        st.markdown('<div class="big-cred">{}</div>'.format(username),
+                    unsafe_allow_html=True)
+        st.write("🔑 Password:")
+        st.markdown('<div class="big-cred">{}</div>'.format(password),
+                    unsafe_allow_html=True)
+        if st.button("✅ Samajh gaya — Login par jayein",
+                     use_container_width=True):
+            del st.session_state.new_cred
+            st.rerun()
+
+    st.stop()
+
+# ------------------------------------------------------------ logged-in app
+username = st.session_state.username
+settings = st.session_state.settings
+
 if "agent" not in st.session_state:
-    st.session_state.agent = OrderAgent()
+    st.session_state.agent = OrderAgent(
+        settings=settings,
+        save_fn=lambda o: add_order(username, o))
 if "chat" not in st.session_state:
     st.session_state.chat = []
 if "phone" not in st.session_state:
@@ -84,11 +110,10 @@ tab_chat, tab_orders, tab_settings = st.tabs(
 with tab_chat:
     st.title("🤖 {} Order Agent".format(settings["shop_name"]))
     st.caption("Customer ban kar baat karein — bilkul WhatsApp jaisa! "
-               "| 👤 {} | ".format(st.session_state.login_user))
+               "| 👤 {} | ".format(username))
     if st.button("🚪 Logout"):
-        st.session_state.logged_in = False
-        st.session_state.login_user = ""
-        st.session_state.chat = []
+        for k in ("username", "settings", "agent", "chat"):
+            st.session_state.pop(k, None)
         st.rerun()
 
     for who, text in st.session_state.chat:
@@ -108,21 +133,16 @@ with tab_chat:
 
     if st.button("🔄 Nayi chat shuru karein"):
         st.session_state.chat = []
-        st.session_state.agent = OrderAgent()
+        st.session_state.agent = OrderAgent(
+            settings=st.session_state.settings,
+            save_fn=lambda o: add_order(username, o))
         st.rerun()
 
 with tab_orders:
     st.title("📦 Orders")
-    orders = []
-    if os.path.exists(ORDERS_FILE):
-        try:
-            with open(ORDERS_FILE, "r", encoding="utf-8") as f:
-                orders = json.load(f)
-        except (json.JSONDecodeError, OSError):
-            orders = []
+    orders = get_orders(username)
     if orders:
         df = pd.DataFrame(orders)
-        # purane orders me "price_aed" tha, naye me "price"
         if "price" not in df.columns and "price_aed" in df.columns:
             df["price"] = df["price_aed"]
         cols = [c for c in ["order_id", "name", "phone", "product",
@@ -134,7 +154,7 @@ with tab_orders:
                   if "price" in df.columns else None)
         csv = df.to_csv(index=False).encode("utf-8-sig")
         st.download_button("⬇️ CSV Download", csv,
-                           "orders.csv", "text/csv")
+                           "orders_{}.csv".format(username), "text/csv")
     else:
         st.info("Abhi koi order nahi — pehle 💬 chat me order karein!")
 
@@ -203,18 +223,20 @@ with tab_settings:
                 "order_prefix": order_prefix.strip() or "SHP",
                 "products": products,
             }
-            save_settings(new_settings)
-            reload_config()
+            save_settings_for(username, new_settings)
             st.session_state.settings = new_settings
-            st.session_state.agent = OrderAgent()  # taaza settings ke saath
+            st.session_state.agent = OrderAgent(
+                settings=new_settings,
+                save_fn=lambda o: add_order(username, o))
             st.success("✅ Save ho gaya! Agent ab **{}** ke naye settings "
                        "par chal raha hai! 🎉".format(new_settings["shop_name"]))
             st.rerun()
 
     if b2.button("↩️ Reset (default Shopora)", use_container_width=True):
-        save_settings(DEFAULT_SETTINGS)
-        reload_config()
-        st.session_state.settings = load_settings()
-        st.session_state.agent = OrderAgent()
+        save_settings_for(username, DEFAULT_SETTINGS)
+        st.session_state.settings = get_settings(username)
+        st.session_state.agent = OrderAgent(
+            settings=st.session_state.settings,
+            save_fn=lambda o: add_order(username, o))
         st.success("✅ Default settings wapas laga di!")
         st.rerun()

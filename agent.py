@@ -1,13 +1,17 @@
 """
-Shopora WhatsApp COD Order Agent 🤖💬
-====================================
+WhatsApp COD Order Agent 🤖💬
+============================
 Real human ki tarah deal karne wala order-taking agent.
+
+Har business ke liye configurable: OrderAgent(settings=...) me us business
+ki settings dein (dukaan ka naam, products, prices, currency...). Settings
+na dein to settings.json/defaults istemal hoti hain.
 
 Kaam:
   - Customer se Roman Urdu me natural baat karta hai (salam, price, discount...)
   - Product select karwata hai, COD confirm karta hai
   - Naam + sheher + mukammal pata leta hai
-  - Order confirm karke orders.json me save karta hai
+  - Order confirm karke save karta hai (save_fn ya orders.json)
 
 Chalane ka tareeqa:
   python agent.py
@@ -26,10 +30,8 @@ from datetime import datetime
 
 from config import load_settings, DEFAULT_SETTINGS
 
-# ---------------------------------------------------------------- config
-# Business settings settings.json se aati hain (config.py). Har banda apne
-# business ke hisaab se ⚙️ Settings tab se badal sakta hai.
-
+# ------------------------------------------------- default (single-business)
+# Webhook/demo purane tareeqe se bhi chal sakte hain — ye defaults hain.
 _CFG = load_settings()
 
 SHOP_NAME = _CFG["shop_name"]
@@ -43,7 +45,7 @@ ORDERS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 
 
 def reload_config():
-    """settings.json dobara parh kar module ke config variables refresh karein."""
+    """settings.json dobara parh kar default config refresh karein."""
     global _CFG, SHOP_NAME, WHATSAPP_NUMBER, CURRENCY, DELIVERY_INFO, \
         ORDER_PREFIX, PRODUCTS
     _CFG = load_settings()
@@ -53,6 +55,7 @@ def reload_config():
     DELIVERY_INFO = _CFG["delivery_info"]
     ORDER_PREFIX = _CFG["order_prefix"]
     PRODUCTS = _CFG["products"]
+
 
 # ------------------------------------------------------- human-like replies
 
@@ -123,10 +126,19 @@ THANKS_REPLIES = [
 # ------------------------------------------------------------- agent core
 
 class OrderAgent:
-    """Ek customer (phone number) ke liye conversation state machine."""
+    """Ek customer (phone number) ke liye conversation state machine.
 
-    def __init__(self):
-        reload_config()  # taaza settings uthayein (⚙️ tab se badli hon to)
+    settings: is business ki settings dict (config.load_settings() jaisi).
+    save_fn:  order save karne ka tareeqa — na dein to orders.json me jayega.
+    """
+
+    def __init__(self, settings=None, save_fn=None):
+        self.cfg = dict(settings) if settings else load_settings()
+        for k, v in DEFAULT_SETTINGS.items():
+            self.cfg.setdefault(k, v)
+        if not self.cfg.get("products"):
+            self.cfg["products"] = DEFAULT_SETTINGS["products"]
+        self.save_fn = save_fn
         self.sessions = {}  # phone -> {"state":..., "product":..., ...}
 
     # -- session helpers -------------------------------------------------
@@ -137,29 +149,31 @@ class OrderAgent:
         self.sessions[phone] = {"state": "idle"}
 
     # -- product helpers -------------------------------------------------
-    @staticmethod
-    def _product_list_text():
+    def _product_list_text(self):
         lines = ["{}. {} — {} {}".format(p["id"], p["name"], p["price"],
-                                         CURRENCY) for p in PRODUCTS]
+                                         self.cfg["currency"])
+                 for p in self.cfg["products"]]
         return "\n".join(lines)
 
-    @staticmethod
-    def _find_product(text):
+    def _find_product(self, text):
         text = text.strip().lower()
+        products = self.cfg["products"]
         m = re.fullmatch(r"\d{1,2}", text)
         if m:
-            for p in PRODUCTS:
+            for p in products:
                 if p["id"] == int(m.group(0)):
                     return p
-        for p in PRODUCTS:
+        for p in products:
             if p["name"].lower() in text or text in p["name"].lower():
                 if len(text) >= 3:
                     return p
         return None
 
     # -- order storage ---------------------------------------------------
-    @staticmethod
-    def _save_order(order):
+    def _save_order(self, order):
+        if self.save_fn:
+            self.save_fn(order)
+            return
         orders = []
         if os.path.exists(ORDERS_FILE):
             try:
@@ -174,6 +188,7 @@ class OrderAgent:
     # -- main entry point ------------------------------------------------
     def handle_message(self, phone, text):
         """WhatsApp webhook ya demo loop — dono isi ko call karein."""
+        cfg = self.cfg
         s = self._session(phone)
         t = text.strip()
         low = t.lower()
@@ -186,13 +201,13 @@ class OrderAgent:
             return ORDER_CANCELLED.format(name=name)
         if re.search(r"(insan|human|boss|manager|call|phone).*(baat|bat|chahiye|kar)",
                      low) or "insan se" in low:
-            return random.choice(HUMAN_REPLIES).format(wa=WHATSAPP_NUMBER)
+            return random.choice(HUMAN_REPLIES).format(wa=cfg["whatsapp"])
 
         # --- state machine ---
         if state == "idle":
             if re.search(r"(salam|aoa|hello|hi|adab)\b", low):
                 s["state"] = "awaiting_product"
-                return random.choice(GREETINGS).format(shop=SHOP_NAME)
+                return random.choice(GREETINGS).format(shop=cfg["shop_name"])
             if "product" in low or "list" in low or "cheez" in low:
                 s["state"] = "awaiting_product"
                 return ASK_PRODUCT.format(plist=self._product_list_text())
@@ -201,14 +216,15 @@ class OrderAgent:
                 s["state"] = "awaiting_product"
                 s["product"] = p
                 return PRODUCT_DETAIL.format(name=p["name"], desc=p["desc"],
-                                             price=p["price"], cur=CURRENCY,
-                                             delivery=DELIVERY_INFO)
+                                             price=p["price"],
+                                             cur=cfg["currency"],
+                                             delivery=cfg["delivery_info"])
             if re.search(r"(price|rate|qeemat|kitne ka|paisa)", low):
                 s["state"] = "awaiting_product"
                 return ("Qeemat jan'na hai? Koi masla nahi! 😊 Pehle product select karein:\n"
                         + self._product_list_text()
                         + "\n\nNumber ya naam likhein!")
-            return random.choice(GREETINGS).format(shop=SHOP_NAME).replace(
+            return random.choice(GREETINGS).format(shop=cfg["shop_name"]).replace(
                 "khush aamdeed! Main aapki kya madad kar sakta hoon?",
                 "khush aamdeed! Product dekhne ke liye **'products'** likhein! 😊")
 
@@ -218,17 +234,20 @@ class OrderAgent:
                 s["product"] = p
                 if re.search(r"(discount|riayat|sasta|kam karo)", low):
                     return random.choice(DISCOUNT_REPLIES).format(
-                        name=p["name"], price=p["price"], cur=CURRENCY)
+                        name=p["name"], price=p["price"],
+                        cur=cfg["currency"])
                 return PRODUCT_DETAIL.format(name=p["name"], desc=p["desc"],
-                                             price=p["price"], cur=CURRENCY,
-                                             delivery=DELIVERY_INFO)
+                                             price=p["price"],
+                                             cur=cfg["currency"],
+                                             delivery=cfg["delivery_info"])
             if re.search(r"(discount|riayat|sasta|kam karo)", low):
-                p0 = s.get("product") or PRODUCTS[0]
+                p0 = s.get("product") or cfg["products"][0]
                 return random.choice(DISCOUNT_REPLIES).format(
-                    name=p0["name"], price=p0["price"], cur=CURRENCY)
+                    name=p0["name"], price=p0["price"],
+                    cur=cfg["currency"])
             if re.search(r"(deliver|kitne din|kab aye|shipping)", low):
                 return random.choice(DELIVERY_REPLIES).format(
-                    delivery=DELIVERY_INFO)
+                    delivery=cfg["delivery_info"])
             if re.search(r"\b(order|book|chahiye|lena hai|done karo)\b", low):
                 if s.get("product"):
                     s["state"] = "awaiting_name"
@@ -260,14 +279,15 @@ class OrderAgent:
             s["state"] = "awaiting_confirm"
             p = s["product"]
             return ASK_CONFIRM.format(pname=p["name"], price=p["price"],
-                                      cur=CURRENCY, name=s["name"],
+                                      cur=cfg["currency"], name=s["name"],
                                       city=s["city"], address=s["address"],
-                                      delivery=DELIVERY_INFO)
+                                      delivery=cfg["delivery_info"])
 
         if state == "awaiting_confirm":
             if re.search(r"\b(han|haan|yes|confirm|ok|theek|done|sahi)\b", low):
                 p = s["product"]
-                oid = ORDER_PREFIX + "-" + datetime.now().strftime("%y%m%d%H%M%S")
+                oid = (cfg["order_prefix"] + "-"
+                       + datetime.now().strftime("%y%m%d%H%M%S"))
                 order = {"order_id": oid, "phone": phone, "name": s["name"],
                          "city": s["city"], "address": s["address"],
                          "product": p["name"], "price": p["price"],
@@ -277,8 +297,9 @@ class OrderAgent:
                 name = s["name"]
                 self._reset(phone)
                 return ORDER_DONE.format(name=name, oid=oid, pname=p["name"],
-                                         price=p["price"], cur=CURRENCY,
-                                         shop=SHOP_NAME)
+                                         price=p["price"],
+                                         cur=cfg["currency"],
+                                         shop=cfg["shop_name"])
             return ("Samajh nahi aaya! 😅 Confirm karne ke liye **'han'** likhein, "
                     "ya cancel ke liye **'cancel'**.")
 
