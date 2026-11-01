@@ -1,5 +1,5 @@
-"""Order Agent — Mobile App 📱
-============================
+"""SaleSathi — Mobile App 📱
+======================
 Multi-business WhatsApp-style order agent.
 
 🔑 Login | 📝 Sign Up (username + password auto-generate)
@@ -17,7 +17,7 @@ from config import DEFAULT_SETTINGS
 from users import (ensure_seed, create_user, verify, get_settings,
                    save_settings_for, get_orders, add_order)
 
-st.set_page_config(page_title="Order Agent", page_icon="🤖",
+st.set_page_config(page_title="SaleSathi", page_icon="🤖",
                    layout="centered")
 
 ensure_seed()  # pehli dafa purana admin migrate ho jaye
@@ -40,8 +40,9 @@ if "username" not in st.session_state:
     st.session_state.username = ""
 
 if not st.session_state.username:
-    st.title("🤖 Order Agent")
-    st.caption("Apne business ke liye AI order-taking agent!")
+    st.title("🤖 SaleSathi")
+    st.caption("Apne business ke liye AI order-taking agent! "
+               "Aapka apna sales sathi! 💪")
     tab_login, tab_signup = st.tabs(["🔑 Login", "📝 Sign Up"])
 
     with tab_login:
@@ -110,7 +111,7 @@ tab_chat, tab_orders, tab_settings = st.tabs(
 with tab_chat:
     st.title("🤖 {} Order Agent".format(settings["shop_name"]))
     st.caption("Customer ban kar baat karein — bilkul WhatsApp jaisa! "
-               "| 👤 {} | ".format(username))
+               "| 👤 {} | ⚡ by SaleSathi".format(username))
     if st.button("🚪 Logout"):
         for k in ("username", "settings", "agent", "chat"):
             st.session_state.pop(k, None)
