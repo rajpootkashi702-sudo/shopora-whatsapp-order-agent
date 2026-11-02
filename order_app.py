@@ -160,6 +160,37 @@ def _fp_reset_password(code, np1, np2):
     st.session_state.pop("fp_wa", None)
     st.success("🎉 Password badal gaya! Ab naye password se login karein. 😊")
 
+
+# ------------------------------------------------------------ WhatsApp tab
+# App ke ANDAR hi WhatsApp connect — QR yahin dikhega, scan yahin se.
+def _wa_bridge_status():
+    """Bridge ka connection status: {"connected": bool}."""
+    import requests as rq
+    try:
+        r = rq.get(_BRIDGE_URL + "/health", timeout=15)
+        if r.ok:
+            return {"connected": bool(r.json().get("connected"))}
+    except Exception as e:
+        print("bridge status failed:", e)
+    return {"connected": False}
+
+
+def _wa_bridge_qr():
+    """Bridge se QR data-URL lein (secret ke saath). None agar na mile."""
+    import requests as rq
+    try:
+        r = rq.get(_BRIDGE_URL + "/qr.json",
+                   params={"secret": _bridge_secret()}, timeout=20)
+        if not r.ok:
+            return None
+        d = r.json()
+        if d.get("connected"):
+            return "connected"
+        return d.get("qr")
+    except Exception as e:
+        print("bridge qr failed:", e)
+        return None
+
 # ------------------------------------------------------------ mobile CSS
 st.markdown("""
 <style>
@@ -306,8 +337,8 @@ if "chat" not in st.session_state:
 if "phone" not in st.session_state:
     st.session_state.phone = "app-customer"
 
-tab_chat, tab_orders, tab_settings = st.tabs(
-    ["💬 Customer Chat", "📦 Orders", "⚙️ Settings"])
+tab_chat, tab_orders, tab_wa, tab_settings = st.tabs(
+    ["💬 Customer Chat", "📦 Orders", "📱 WhatsApp", "⚙️ Settings"])
 
 with tab_chat:
     st.title("🤖 {} Order Agent".format(settings["shop_name"]))
@@ -406,6 +437,36 @@ with tab_orders:
             st.info("Sab orders verified ya cancelled hain. 🎉")
     else:
         st.info("Abhi koi order nahi — pehle 💬 chat me order karein!")
+
+with tab_wa:
+    st.title("📱 WhatsApp Connection")
+    st.caption("Apne WhatsApp se agent jorein — phir customer ke messages ka "
+               "jawab agent khud dega! 🤖")
+    _wa_st = _wa_bridge_status()
+    if _wa_st.get("connected"):
+        st.success("✅ **WhatsApp connected hai!** Agent customer messages ka "
+                   "jawab de raha hai. 🎉")
+        if st.button("🔄 Status refresh karein", key="wa_ref1"):
+            st.rerun()
+    else:
+        st.warning("❌ WhatsApp abhi connected nahi hai.")
+        st.write("**Connect karne ka tareeqa:**")
+        st.write("1. Neeche QR code ko scan karein")
+        st.write("2. WhatsApp kholein → **⋮ → Linked devices → Link a device**")
+        _qr = _wa_bridge_qr()
+        if _qr == "connected":
+            st.success("✅ Connected ho gaya!")
+            st.rerun()
+        elif _qr:
+            import base64 as _b64
+            _img_bytes = _b64.b64decode(_qr.split(",", 1)[1])
+            st.image(_img_bytes, width=300)
+            st.caption("QR thori der me badal jata hai — naya QR ke liye "
+                       "Refresh dabayein.")
+        else:
+            st.info("QR tayyar ho raha hai… thori der baad Refresh dabayein.")
+        if st.button("🔄 Refresh", key="wa_ref2"):
+            st.rerun()
 
 with tab_settings:
     st.title("⚙️ Business Settings")
