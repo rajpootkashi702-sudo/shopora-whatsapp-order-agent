@@ -237,9 +237,34 @@ def _show_product_images(reply_text, settings):
 if "username" not in st.session_state:
     st.session_state.username = ""
 
+def _read_remember_token():
+    """sa_token cookie parhein — masla ye tha ke CookieManager component
+    pehli run me hydrate nahi hota (JS race), is liye dobara open karne par
+    cookie hote hue bhi login mangta tha. Ab pehle server-side Cookie header
+    se parhte hain (browser har request me bhejta hai — foran, baghair race
+    ke), phir component se fallback + ek hydration rerun."""
+    try:
+        _hdr_cookie = st.context.headers.get("cookie", "")
+    except Exception:
+        _hdr_cookie = ""
+    for _part in _hdr_cookie.split(";"):
+        _kv = _part.strip().split("=", 1)
+        if len(_kv) == 2 and _kv[0].strip() == _SS_COOKIE:
+            _val = _kv[1].strip().strip('"')
+            if _val:
+                return _val
+    _got = _cookies.get(_SS_COOKIE)
+    if _got:
+        return _got
+    if not st.session_state.get("_cookie_hydrated"):
+        st.session_state["_cookie_hydrated"] = True
+        st.rerun()
+    return None
+
+
 # Cookie me purana token ho to khud-ba-khud login (remember me)
 if not st.session_state.username:
-    _saved = _cookies.get(_SS_COOKIE)
+    _saved = _read_remember_token()
     _auto_user = verify_session_token(_saved) if _saved else None
     if _auto_user:
         _do_login(_auto_user)
