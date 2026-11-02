@@ -128,6 +128,36 @@ def incoming():
     return "OK", 200
 
 
+@app.route("/baileys_inbound", methods=["POST"])
+def baileys_inbound():
+    """Baileys bridge (QR wali WhatsApp connection) se aaya message.
+
+    Bridge customer ka {phone, text} bhejta hai, agent ka jawab wapas leta
+    hai aur customer ko WhatsApp par de deta hai.
+    Meta wale interactive Confirm buttons yahan nahi chalte — order agent
+    ke apne in-chat flow ("han"/"cancel") se confirm hota hai, is liye
+    on_order_fn (Meta auto-confirm) is request me band rehta hai.
+    BAILEYS_SECRET set ho to bridge ko wohi secret bhejna lazmi hai.
+    """
+    data = request.get_json(silent=True) or {}
+    secret = os.environ.get("BAILEYS_SECRET", "")
+    if secret and data.get("secret") != secret:
+        return {"error": "forbidden"}, 403
+    phone = str(data.get("phone", "")).strip()
+    text = str(data.get("text", "")).strip()
+    if not phone or not text:
+        return {"reply": ""}, 200
+    print("Baileys <-", phone, ":", text[:80])
+    orig_on_order = agent.on_order_fn
+    agent.on_order_fn = None
+    try:
+        reply = agent.handle_message(phone, text)
+    finally:
+        agent.on_order_fn = orig_on_order
+    print("Baileys ->", phone, ":", (reply or "")[:80])
+    return {"reply": reply or ""}, 200
+
+
 @app.route("/", methods=["GET"])
 def home():
     return "Sales Assistant webhook chal raha hai! ✅", 200
