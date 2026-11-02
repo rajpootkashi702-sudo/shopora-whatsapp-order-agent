@@ -145,6 +145,72 @@ def get_orders(username):
     return u.get("orders") or []
 
 
+# ------------------------------------------------------- forgot password
+# WhatsApp code wala reset: username → 6-digit code (10 min expiry) →
+# code verify → naya password. Code user ke apne WhatsApp number par
+# jata hai (bridge ke /send se), is liye koi aur istemal nahi kar sakta.
+
+def _reset_code_hash(code):
+    return hashlib.sha256(("reset:" + code).encode("utf-8")).hexdigest()
+
+
+def create_reset_code(username):
+    """6-digit reset code banayein. Returns (code, wa_number)
+    ya (None, "not_found" / "no_whatsapp")."""
+    data = load_users()
+    u = data["users"].get((username or "").strip())
+    if not u:
+        return None, "not_found"
+    wa = (u.get("settings") or {}).get("whatsapp", "").strip()
+    if not wa:
+        return None, "no_whatsapp"
+    code = "{:06d}".format(secrets.randbelow(1000000))
+    u["reset_code_hash"] = _reset_code_hash(code)
+    u["reset_code_exp"] = time.time() + 600  # 10 minute
+    u["reset_code_tries"] = 0
+    save_users(data)
+    return code, wa
+
+
+def verify_reset_code(username, code):
+    """Code theek aur expiry me ho to True (ek dafa istemal hota hai)."""
+    data = load_users()
+    u = data["users"].get((username or "").strip())
+    if not u or not u.get("reset_code_hash"):
+        return False
+    if u.get("reset_code_tries", 0) >= 3:
+        return False
+    if time.time() > u.get("reset_code_exp", 0):
+        return False
+    u["reset_code_tries"] = u.get("reset_code_tries", 0) + 1
+    ok = u["reset_code_hash"] == _reset_code_hash((code or "").strip())
+    if ok:
+        u.pop("reset_code_hash", None)
+        u.pop("reset_code_exp", None)
+        u.pop("reset_code_tries", None)
+        u["reset_verified"] = time.time() + 600  # ab password badal sakte hain
+    save_users(data)
+    return ok
+
+
+def set_new_password(username, password):
+    """Reset-code verify hone ke baad naya password lagayein."""
+    if not password or len(password) < 4:
+        raise ValueError("Password kam az kam 4 harf ka rakhein.")
+    data = load_users()
+    u = data["users"].get((username or "").strip())
+    if not u:
+        raise ValueError("User nahi mila.")
+    if time.time() > u.get("reset_verified", 0):
+        raise ValueError("Pehle reset code verify karein.")
+    u["password_hash"] = _hash(password)
+    u.pop("reset_verified", None)
+    # purane sessions khatam — sab devices dobara login karein ge
+    u.pop("session_token_hash", None)
+    u.pop("session_token_exp", None)
+    save_users(data)
+
+
 def add_order(username, order):
     data = load_users()
     if username in data["users"]:

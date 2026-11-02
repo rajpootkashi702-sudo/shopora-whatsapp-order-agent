@@ -74,6 +74,92 @@ def _do_login(username):
         st.session_state.settings, username)
     st.session_state.chat = []
 
+# ------------------------------------------------------------ forgot password
+# Username → user ke WhatsApp number par 6-digit code (bridge ke /send se)
+# → code verify → naya password. Bridge ka secret Streamlit Secrets me
+# BAILEYS_SECRET ke naam se lagayein.
+_BRIDGE_URL = "https://sales-assistant-wa-bridge.onrender.com"
+
+
+def _bridge_secret():
+    try:
+        return st.secrets.get("BAILEYS_SECRET", "") or ""
+    except Exception:
+        return ""
+
+
+def _wa_digits(wa):
+    d = re.sub(r"\D", "", wa or "")
+    if d.startswith("0") and len(d) > 9:
+        d = "92" + d[1:]  # 0312... → 92312...
+    return d
+
+
+def _mask_phone(wa):
+    d = _wa_digits(wa)
+    return ("+" + d[:-6] + "****" + d[-2:]) if len(d) > 6 else "****"
+
+
+def _fp_send_code(username):
+    from users import create_reset_code
+    if not username:
+        st.error("❌ Pehle username likhein!")
+        return
+    code, wa_or_reason = create_reset_code(username)
+    if code is None:
+        if wa_or_reason == "not_found":
+            st.error("❌ Ye username maujood nahi hai.")
+        else:
+            st.error("❌ Is account par WhatsApp number nahi hai — "
+                     "admin se rabta karein.")
+        return
+    digits = _wa_digits(wa_or_reason)
+    if len(digits) < 10:
+        st.error("❌ WhatsApp number mukammal nahi hai — admin se rabta karein.")
+        return
+    import requests as rq
+    try:
+        r = rq.post(_BRIDGE_URL + "/send",
+                    json={"to": digits,
+                          "text": "🔑 *Sales Assistant* — password reset code: "
+                                  "*{}*\nYe code 10 minute me expire ho jayega. "
+                                  "Kisi ko na batayein!".format(code),
+                          "secret": _bridge_secret()},
+                    timeout=25)
+        ok = r.ok and r.json().get("ok")
+    except Exception as e:
+        ok = False
+        print("reset code send failed:", e)
+    if not ok:
+        st.error("❌ Code nahi bheja ja saka — WhatsApp bridge abhi connected "
+                 "nahi hai. Thori der baad dobara try karein.")
+        return
+    st.session_state.fp_sent_for = username
+    st.session_state.fp_wa = wa_or_reason
+    st.success("✅ Code bhej diya!")
+
+
+def _fp_reset_password(code, np1, np2):
+    from users import verify_reset_code, set_new_password
+    username = st.session_state.get("fp_sent_for", "")
+    if not username:
+        st.error("❌ Pehle 'Code bhejein' dabayein!")
+        return
+    if np1 != np2:
+        st.error("❌ Dono password mil nahi rahe — dobara likhein!")
+        return
+    if not verify_reset_code(username, code):
+        st.error("❌ Code ghalat ya expire ho gaya (3 koshishen hoti hain)!")
+        return
+    try:
+        set_new_password(username, np1)
+    except ValueError as e:
+        st.error("❌ {}".format(e))
+        return
+    st.session_state.pop("fp_sent_for", None)
+    st.session_state.pop("fp_wa", None)
+    st.success("🎉 Password badal gaya! Ab naye password se login karein. 😊")
+
 # ------------------------------------------------------------ mobile CSS
 st.markdown("""
 <style>
@@ -148,6 +234,27 @@ if not st.session_state.username:
                 st.rerun()
             else:
                 st.error("❌ Ghalat username ya password!")
+
+        st.markdown("---")
+        with st.expander("🔑 Password bhool gaye?"):
+            st.write("Apna username likhein — aapke WhatsApp number par "
+                     "6-digit code bhejein ge, us se naya password banayein.")
+            fu = st.text_input("Username", key="fp_user")
+            if st.button("📲 Code bhejein", use_container_width=True,
+                         key="fp_send"):
+                _fp_send_code(fu.strip())
+            if st.session_state.get("fp_sent_for"):
+                st.info("📲 Code bhej diya {} par — 10 minute me istemal "
+                        "karein.".format(
+                            _mask_phone(st.session_state.get("fp_wa", ""))))
+                fc = st.text_input("6-digit code", key="fp_code", max_chars=6)
+                np1 = st.text_input("Naya password (kam az kam 4 harf)",
+                                    type="password", key="fp_np1")
+                np2 = st.text_input("Naya password dobara",
+                                    type="password", key="fp_np2")
+                if st.button("✅ Password badlein", use_container_width=True,
+                             key="fp_do"):
+                    _fp_reset_password(fc, np1, np2)
 
     with tab_signup:
         st.write("**Naya business account banayein** — apna username aur "
