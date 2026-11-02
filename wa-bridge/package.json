@@ -1,0 +1,1 @@
+{"dependencies":{"@whiskeysockets/baileys":"^6.17.16","express":"^4.19.2","pino":"^9.0.0","qrcode":"^1.5.4"},"description":"Sales Assistant WhatsApp bridge — Baileys linked-device connection (no Meta Cloud API needed)","engines":{"node":">=18"},"main":"index.js","name":"sales-assistant-wa-bridge","scripts":{"start":"node index.js"},"version":"1.0.0"}
