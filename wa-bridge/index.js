@@ -174,6 +174,28 @@ app.get("/qr", async (req, res) => {
   }
 });
 
+// In-app QR (Streamlit app ke andar) — secret ke saath, taake sirf
+// login-shuda app se QR nikle. Returns {connected, number, qr(dataURL|null)}
+app.get("/qr.json", async (req, res) => {
+  const secret = (req.query && req.query.secret) || "";
+  if (BAILEYS_SECRET && secret !== BAILEYS_SECRET) {
+    return res.status(403).json({ ok: false, error: "forbidden" });
+  }
+  if (connectedJid) {
+    return res.json({ ok: true, connected: true,
+                      number: shortJid(connectedJid) });
+  }
+  if (!currentQR) {
+    return res.json({ ok: true, connected: false, qr: null });
+  }
+  try {
+    const img = await QRCode.toDataURL(currentQR, { width: 300, margin: 2 });
+    res.json({ ok: true, connected: false, qr: img });
+  } catch (e) {
+    res.json({ ok: true, connected: false, qr: null });
+  }
+});
+
 // Python webhook yahan se bridge ke zariye WhatsApp text bhej sakta hai
 // (mustaqbil me kaam aayega — abhi istemal nahi ho raha)
 app.post("/send", async (req, res) => {
